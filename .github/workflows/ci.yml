@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+    branches-ignore:
+      - 'gh-readonly-queue/**'
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build:
+    name: Build, test, package
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build (production)
+        run: npm run build:prod
+
+      - name: Compile tests
+        run: npm run compile-tests
+
+      - name: Unit tests
+        run: npx mocha 'out-test/test/unit/**/*.test.js'
+
+      - name: Integration tests (xvfb)
+        run: xvfb-run -a node ./out-test/test/integration/runTest.js
+
+      - name: Package VSIX
+        run: npx vsce package --no-dependencies
+
+      - name: Read version
+        id: pkg
+        run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Upload VSIX artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vscode-css-modules-${{ steps.pkg.outputs.version }}-${{ github.sha }}
+          path: '*.vsix'
+          if-no-files-found: error
+          retention-days: 30

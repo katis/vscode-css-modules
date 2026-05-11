@@ -1,0 +1,88 @@
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Tag and release if version bumped
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Read version
+        id: pkg
+        run: |
+          version=$(node -p "require('./package.json').version")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=v$version" >> "$GITHUB_OUTPUT"
+
+      - name: Check if tag already exists
+        id: tag_check
+        run: |
+          if git rev-parse --verify --quiet "refs/tags/${{ steps.pkg.outputs.tag }}" >/dev/null; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Tag ${{ steps.pkg.outputs.tag }} already exists — skipping release."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install dependencies
+        if: steps.tag_check.outputs.exists == 'false'
+        run: npm ci
+
+      - name: Build (production)
+        if: steps.tag_check.outputs.exists == 'false'
+        run: npm run build:prod
+
+      - name: Compile tests
+        if: steps.tag_check.outputs.exists == 'false'
+        run: npm run compile-tests
+
+      - name: Unit tests
+        if: steps.tag_check.outputs.exists == 'false'
+        run: npx mocha 'out-test/test/unit/**/*.test.js'
+
+      - name: Integration tests (xvfb)
+        if: steps.tag_check.outputs.exists == 'false'
+        run: xvfb-run -a node ./out-test/test/integration/runTest.js
+
+      - name: Package VSIX
+        if: steps.tag_check.outputs.exists == 'false'
+        run: npx vsce package --no-dependencies --out "vscode-css-modules-${{ steps.pkg.outputs.version }}.vsix"
+
+      - name: Create tag
+        if: steps.tag_check.outputs.exists == 'false'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "${{ steps.pkg.outputs.tag }}" -m "Release ${{ steps.pkg.outputs.tag }}"
+          git push origin "${{ steps.pkg.outputs.tag }}"
+
+      - name: Create GitHub Release
+        if: steps.tag_check.outputs.exists == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ steps.pkg.outputs.tag }}" \
+            "vscode-css-modules-${{ steps.pkg.outputs.version }}.vsix" \
+            --title "${{ steps.pkg.outputs.tag }}" \
+            --generate-notes \
+            --target "${{ github.sha }}"
