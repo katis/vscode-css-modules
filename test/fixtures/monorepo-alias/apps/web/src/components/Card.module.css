@@ -1,0 +1,22 @@
+.primaryAction {
+  color: blue;
+}
+
+@media (max-width: 600px) {
+  .nestedInMedia {
+    color: green;
+  }
+}
+
+:global(.globalClass) {
+  color: purple;
+}
+
+.first,
+.second {
+  font-weight: bold;
+}
+
+[data-state="active"].activeRow {
+  background: yellow;
+}

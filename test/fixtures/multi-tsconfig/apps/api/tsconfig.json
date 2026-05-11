@@ -1,0 +1,11 @@
+{
+  "compilerOptions": {
+    "module": "esnext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "paths": {
+      "@api/*": ["./src/*"]
+    }
+  },
+  "include": ["src/**/*"]
+}

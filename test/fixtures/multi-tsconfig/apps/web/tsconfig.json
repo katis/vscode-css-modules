@@ -1,0 +1,12 @@
+{
+  "compilerOptions": {
+    "module": "esnext",
+    "moduleResolution": "Bundler",
+    "jsx": "preserve",
+    "strict": true,
+    "paths": {
+      "#*": ["./src/*"]
+    }
+  },
+  "include": ["src/**/*"]
+}
